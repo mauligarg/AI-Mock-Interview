@@ -13,6 +13,10 @@ interface Interview {
   score: number;
   duration: number;
   topic: string;
+  company?: string;
+  companyProfileKey?: string;
+  interviewMode?: string;
+  companyFocusAreas?: string[];
 }
 
 interface ResumeAnalysis {
@@ -37,10 +41,79 @@ const INTERVIEW_DOMAINS = [
   { label: "Database Design", icon: "🗄️", desc: "SQL, NoSQL, indexing" },
   { label: "General", icon: "🎯", desc: "Behavioural & fundamentals" },
 ];
+
+const COMPANY_PROFILES = [
+  {
+    key: "general",
+    name: "General / Standard",
+    badge: "Standard",
+    icon: "🎯",
+    desc: "Balanced technical fundamentals, coding, and problem solving across all levels.",
+    focusAreas: ["CS Fundamentals", "Coding", "Problem Solving", "Communication"],
+  },
+  {
+    key: "google",
+    name: "Google",
+    badge: "Product Titan",
+    icon: "🔍",
+    desc: "DSA, algorithmic reasoning, complexity analysis, optimization & system thinking.",
+    focusAreas: ["DSA", "Algorithms", "Problem Solving", "System Thinking"],
+  },
+  {
+    key: "amazon",
+    name: "Amazon",
+    badge: "Big Tech",
+    icon: "📦",
+    desc: "Coding, problem solving, STAR behavioral questions, leadership principles & ownership.",
+    focusAreas: ["DSA", "Problem Solving", "Behavioral", "Ownership"],
+  },
+  {
+    key: "microsoft",
+    name: "Microsoft",
+    badge: "Enterprise",
+    icon: "🪟",
+    desc: "Coding, debugging, software design thinking, CS fundamentals & practical algorithms.",
+    focusAreas: ["Coding", "Debugging", "Design Thinking", "CS Fundamentals"],
+  },
+  {
+    key: "tcs",
+    name: "TCS",
+    badge: "IT Services",
+    icon: "🔷",
+    desc: "Programming fundamentals, OOP, DBMS, SQL, Operating Systems, Computer Networks & clarity.",
+    focusAreas: ["Fundamentals", "OOP", "DBMS", "OS", "CN", "Basic Coding"],
+  },
+  {
+    key: "infosys",
+    name: "Infosys",
+    badge: "IT Services",
+    icon: "🌐",
+    desc: "Programming fundamentals, Java/OOP, SQL queries, DBMS, basic DSA & project understanding.",
+    focusAreas: ["Fundamentals", "Java/OOP", "SQL", "DBMS", "Basic DSA"],
+  },
+  {
+    key: "startup",
+    name: "Startup",
+    badge: "Fast-Paced",
+    icon: "🚀",
+    desc: "Real-world problem solving, project architecture, APIs, debugging, deployment & ownership.",
+    focusAreas: ["APIs", "Debugging", "Architecture", "Ownership", "Practical Dev"],
+  },
+  {
+    key: "product_based",
+    name: "Product-Based Company",
+    badge: "Product Focus",
+    icon: "⚡",
+    desc: "DSA, system design, optimization, scalability, system architecture & deep technical reasoning.",
+    focusAreas: ["DSA", "System Design", "Optimization", "Scalability", "Architecture"],
+  },
+];
 function ResumePanel({
   onDomainSelect,
+  onAnalysisSuccess,
 }: {
   onDomainSelect: (d: string) => void;
+  onAnalysisSuccess?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -99,6 +172,9 @@ function ResumePanel({
       );
       setAnalysis(data.analysis);
       setStep("results");
+      if (onAnalysisSuccess) {
+        onAnalysisSuccess();
+      }
     } catch (error: any) {
       setError(error?.response?.data?.message);
       setStep("upload");
@@ -436,6 +512,8 @@ function ResumePanel({
     </Card>
   );
 }
+import PlacementReadinessCard, { ReadinessData } from "@/components/PlacementReadinessCard";
+
 const page = () => {
   const router = useRouter();
   const { isLoggedIn, isLoading: authLoading, user } = useAuth();
@@ -444,7 +522,15 @@ const page = () => {
   const [ShowDomainSelector, setShowDomainSelector] = useState(false);
   const [hoveredDomain, setHoveredDomain] = useState<string | null>(null);
   const [filterDomain, setFilterDomain] = useState<String>("All");
-  const [activeTab, setActiveTab] = useState<"history" | "resume">("history");
+  const [activeTab, setActiveTab] = useState<"history" | "resume" | "readiness">("readiness");
+
+  // AI Recruiter Simulator selection state
+  const [selectedCompanyKey, setSelectedCompanyKey] = useState<string>("google");
+
+  const [readinessData, setReadinessData] = useState<ReadinessData | null>(null);
+  const [readinessHasInterviews, setReadinessHasInterviews] = useState(false);
+  const [readinessHasResume, setReadinessHasResume] = useState(false);
+  const [gamificationSummary, setGamificationSummary] = useState<any>(null);
 
   useEffect(() => {
     if (!authLoading && !isLoggedIn) {
@@ -453,8 +539,24 @@ const page = () => {
   }, [isLoggedIn, authLoading, router]);
 
   useEffect(() => {
-    if (isLoggedIn) fetchInterviews();
+    if (isLoggedIn) {
+      fetchInterviews();
+      fetchReadiness();
+      fetchGamificationSummary();
+    }
   }, [isLoggedIn]);
+
+  const fetchGamificationSummary = async () => {
+    try {
+      const { data } = await axiosInstance.get("/api/gamification/profile");
+      if (data && data.profile) {
+        setGamificationSummary(data.profile);
+      }
+    } catch (error) {
+      console.error("Failed to fetch gamification summary:", error);
+    }
+  };
+
   const fetchInterviews = async () => {
     try {
       setDataLoading(true);
@@ -466,8 +568,24 @@ const page = () => {
       setDataLoading(false);
     }
   };
-  const handleSelectDomain = (domain: string) => {
-    router.push(`/interview?domain=${encodeURIComponent(domain)}`);
+
+  const fetchReadiness = async () => {
+    try {
+      const { data } = await axiosInstance.get("/api/readiness");
+      if (data) {
+        setReadinessData(data.readiness || null);
+        setReadinessHasInterviews(data.hasInterviews || false);
+        setReadinessHasResume(data.hasResume || false);
+      }
+    } catch (error) {
+      console.error("Failed to fetch readiness:", error);
+    }
+  };
+  const handleSelectDomain = (domain: string, company: string = selectedCompanyKey) => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("active_interview_session");
+    }
+    router.push(`/interview?domain=${encodeURIComponent(domain)}&company=${encodeURIComponent(company)}`);
   };
   if (authLoading) {
     return (
@@ -521,6 +639,42 @@ const page = () => {
             ⚡ New Interview
           </Button>
         </section>
+
+        {/* ── PEER CHALLENGE ARENA SHORTCUT CARD ── */}
+        <Card className="p-6 border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-card to-orange-500/10 shadow-md">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white font-black text-2xl flex items-center justify-center shadow-lg shrink-0">
+                🏆
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-black text-foreground">Peer Challenge Arena</h2>
+                  <span className="text-[10px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Competitive Sprints
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Compete in daily & weekly AI interview challenges, earn XP, unlock badges & rank among peers!
+                </p>
+                {gamificationSummary && (
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-semibold">
+                    <span className="text-amber-600 dark:text-amber-400">🏅 Rank: {gamificationSummary.currentRank || "Bronze III"}</span>
+                    <span className="text-orange-600 dark:text-orange-400">🔥 Streak: {gamificationSummary.currentStreak || 0} days</span>
+                    <span className="text-primary font-bold">✨ {gamificationSummary.totalXP || 0} XP</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <Button
+              size="lg"
+              onClick={() => router.push("/challenges")}
+              className="bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-white rounded-full font-bold px-6 shadow-md hover:shadow-lg transition-all shrink-0"
+            >
+              🏆 Enter Peer Challenge Arena →
+            </Button>
+          </div>
+        </Card>
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             {
@@ -609,24 +763,60 @@ const page = () => {
             </div>
           </Card>
         )}
+        {/* Featured Placement Readiness Overview Section */}
         <section>
-          <div className="flex items-center gap-1 mb-6 border-b border-border/50">
-            {(["history", "resume"] as const).map((tab) => (
+          <PlacementReadinessCard
+            readiness={readinessData}
+            hasInterviews={readinessHasInterviews}
+            hasResume={readinessHasResume}
+            isLoading={dataLoading}
+          />
+        </section>
+
+        <section>
+          <div className="flex items-center gap-1 mb-6 border-b border-border/50 overflow-x-auto">
+            {(["readiness", "history", "resume"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all ${
+                className={`px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap ${
                   activeTab === tab
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab === "history"
+                {tab === "readiness"
+                  ? "🚀 Placement Readiness"
+                  : tab === "history"
                   ? "📋 Interview History"
                   : "📄 Resume Analysis"}
               </button>
             ))}
           </div>
+
+          {activeTab === "readiness" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-foreground">
+                  AI Placement Readiness Analytics
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/dashboard/readiness")}
+                  className="text-xs font-bold bg-primary text-primary-foreground hover:opacity-90"
+                >
+                  Full Readiness Report →
+                </Button>
+              </div>
+              <PlacementReadinessCard
+                readiness={readinessData}
+                hasInterviews={readinessHasInterviews}
+                hasResume={readinessHasResume}
+                isLoading={dataLoading}
+              />
+            </div>
+          )}
+
           {activeTab === "history" && (
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -719,6 +909,11 @@ const page = () => {
                               <p className="font-semibold text-foreground text-sm truncate">
                                 {interview.topic}
                               </p>
+                              {interview.company && interview.company !== "General" && (
+                                <span className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold">
+                                  🏢 {interview.company}
+                                </span>
+                              )}
                               <ScoreBadge score={interview.score} />
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
@@ -754,7 +949,8 @@ const page = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="rounded-full text-xs border-border/60 hidden sm:flex"
+                              onClick={() => router.push(`/interview?sessionId=${interview.id}`)}
+                              className="rounded-full text-xs border-border/60 hidden sm:flex hover:bg-primary/10 hover:text-primary transition-colors"
                             >
                               Details
                             </Button>
@@ -762,7 +958,7 @@ const page = () => {
                               size="sm"
                               className="rounded-full text-xs bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white"
                               onClick={() =>
-                                handleSelectDomain(interview.topic)
+                                handleSelectDomain(interview.topic, interview.companyProfileKey || "general")
                               }
                             >
                               Retake
@@ -777,25 +973,29 @@ const page = () => {
             </div>
           )}
           {activeTab === "resume" && (
-            <ResumePanel onDomainSelect={handleSelectDomain} />
+            <ResumePanel
+              onDomainSelect={handleSelectDomain}
+              onAnalysisSuccess={fetchReadiness}
+            />
           )}
         </section>
       </div>
       {ShowDomainSelector && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowDomainSelector(false);
           }}
         >
-          <Card className="w-full max-w-xl p-6 border border-border shadow-2xl">
-            <div className="flex items-start justify-between mb-6">
+          <Card className="w-full max-w-3xl p-6 sm:p-8 border border-border shadow-2xl space-y-6 bg-card max-h-[90vh] overflow-y-auto my-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-4 border-b border-border/60">
               <div>
-                <h2 className="text-xl font-black text-foreground mb-1">
-                  Pick a Domain
+                <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+                  <span>🏢</span> AI Recruiter Simulator & Setup
                 </h2>
-                <p className="text-sm text-muted-foreground">
-                  Choose what you want to practice today
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Select a target company to simulate their recruitment style and evaluation criteria
                 </p>
               </div>
               <button
@@ -806,47 +1006,126 @@ const page = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-5">
-              {INTERVIEW_DOMAINS.map((domain) => (
-                <button
-                  key={domain.label}
-                  onMouseEnter={() => setHoveredDomain(domain.label)}
-                  onMouseLeave={() => setHoveredDomain(null)}
-                  onClick={() => {
-                    setShowDomainSelector(false);
-                    handleSelectDomain(domain.label);
-                  }}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-150 ${
-                    hoveredDomain === domain.label
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border/60 hover:border-primary/40"
-                  }`}
-                >
-                  <span className="text-2xl flex-shrink-0">{domain.icon}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {domain.label}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {domain.desc}
-                    </p>
+            {/* 1️⃣ COMPANY RECRUITER SIMULATION SELECTOR */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span>Select Target Company Profile</span>
+                <span className="text-primary text-[11px] font-semibold">
+                  Adapts question style, follow-ups & feedback
+                </span>
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {COMPANY_PROFILES.map((comp) => {
+                  const isSelected = selectedCompanyKey === comp.key;
+                  return (
+                    <button
+                      key={comp.key}
+                      onClick={() => setSelectedCompanyKey(comp.key)}
+                      className={`p-3 rounded-xl border text-left transition-all duration-200 flex flex-col justify-between gap-2 ${
+                        isSelected
+                          ? "border-primary bg-primary/10 shadow-md ring-2 ring-primary/20"
+                          : "border-border/60 hover:border-primary/40 hover:bg-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xl">{comp.icon}</span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                            isSelected
+                              ? "bg-primary text-white border-primary"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}
+                        >
+                          {comp.badge}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground truncate">{comp.name}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Selected Company Description Box */}
+              {(() => {
+                const activeComp = COMPANY_PROFILES.find((c) => c.key === selectedCompanyKey) || COMPANY_PROFILES[0];
+                return (
+                  <div className="p-4 rounded-xl bg-muted/40 border border-primary/20 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-foreground flex items-center gap-1.5">
+                        <span>{activeComp.icon}</span> {activeComp.name} Interview Focus
+                      </span>
+                      <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-semibold">
+                        Simulated Recruitment Profile
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-xs leading-relaxed">{activeComp.desc}</p>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="font-semibold text-muted-foreground text-[11px] self-center mr-1">Core Focus:</span>
+                      {activeComp.focusAreas.map((fa, i) => (
+                        <span key={i} className="px-2.5 py-0.5 rounded-full text-[11px] bg-background border border-border font-medium text-foreground">
+                          {fa}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <span
-                    className={`ml-auto text-primary transition-opacity text-xs ${hoveredDomain === domain.label ? "opacity-100" : "opacity-0"}`}
-                  >
-                    →
-                  </span>
-                </button>
-              ))}
+                );
+              })()}
             </div>
 
-            <Button
-              variant="ghost"
-              className="w-full rounded-xl text-muted-foreground hover:text-foreground text-sm"
-              onClick={() => setShowDomainSelector(false)}
-            >
-              Cancel
-            </Button>
+            {/* 2️⃣ DOMAIN SELECTOR */}
+            <div className="space-y-3 pt-2">
+              <label className="text-xs font-bold text-foreground">Select Technical Role / Domain</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {INTERVIEW_DOMAINS.map((domain) => {
+                  const isHovered = hoveredDomain === domain.label;
+                  return (
+                    <button
+                      key={domain.label}
+                      onMouseEnter={() => setHoveredDomain(domain.label)}
+                      onMouseLeave={() => setHoveredDomain(null)}
+                      onClick={() => {
+                        setShowDomainSelector(false);
+                        handleSelectDomain(domain.label, selectedCompanyKey);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between gap-1.5 ${
+                        isHovered
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border/60 hover:border-primary/40"
+                      }`}
+                    >
+                      <span className="text-2xl">{domain.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{domain.label}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{domain.desc}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-border/60">
+              <Button
+                variant="ghost"
+                className="rounded-xl text-muted-foreground hover:text-foreground text-xs"
+                onClick={() => setShowDomainSelector(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowDomainSelector(false);
+                  handleSelectDomain("General", selectedCompanyKey);
+                }}
+                className="rounded-xl bg-gradient-to-r from-primary to-accent text-white font-bold text-xs px-6 py-2.5 shadow-md"
+              >
+                🚀 Start {COMPANY_PROFILES.find((c) => c.key === selectedCompanyKey)?.name} Interview →
+              </Button>
+            </div>
           </Card>
         </div>
       )}

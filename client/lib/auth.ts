@@ -1,49 +1,69 @@
-const TOKEN_KEY = 'token';
-const USER_KEY = 'user';
+const TOKEN_KEY = "token";
+const USER_KEY = "user";
+const SESSION_ID_KEY = "sessionId";
 
 export interface StoredUser {
-    id: string;
-    name: string;
-    email: string;
+  id: string;
+  name: string;
+  email: string;
+  isEmailVerified?: boolean;
+  role?: "student" | "mentor" | "admin";
+  permissions?: string[];
+  effectivePermissions?: string[];
 }
 
 // ── Token ─────────────────────────────────────────────────
 export const getToken = (): string | null => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(TOKEN_KEY);
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
 };
 
 export const setToken = (token: string): void => {
-    localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(TOKEN_KEY, token);
 };
 
 export const removeToken = (): void => {
-    localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+};
+
+// ── Session ID ───────────────────────────────────────────
+export const getSessionId = (): string | null => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SESSION_ID_KEY);
+};
+
+export const setSessionId = (sessionId: string): void => {
+  localStorage.setItem(SESSION_ID_KEY, sessionId);
+};
+
+export const removeSessionId = (): void => {
+  localStorage.removeItem(SESSION_ID_KEY);
 };
 
 // ── User ──────────────────────────────────────────────────
 export const getStoredUser = (): StoredUser | null => {
-    if (typeof window === 'undefined') return null;
-    try {
-        const raw = localStorage.getItem(USER_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch {
-        return null;
-    }
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 };
 
 export const setStoredUser = (user: StoredUser): void => {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
 export const removeStoredUser = (): void => {
-    localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(USER_KEY);
 };
 
 // ── Combined ──────────────────────────────────────────────
 export const clearAuth = (): void => {
-    removeToken();
-    removeStoredUser();
+  removeToken();
+  removeStoredUser();
+  removeSessionId();
 };
 
 export const isAuthenticated = (): boolean => !!getToken();

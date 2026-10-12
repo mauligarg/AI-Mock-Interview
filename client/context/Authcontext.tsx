@@ -14,10 +14,12 @@ import {
   clearAuth,
   getStoredUser,
   getToken,
+  setSessionId,
   setStoredUser,
   setToken,
   StoredUser,
 } from "@/lib/auth";
+import { checkHasPermission, checkHasRole, Role } from "@/lib/permissions";
 
 // ── Types ─────────────────────────────────────────────────
 interface AuthContextValue {
@@ -25,10 +27,13 @@ interface AuthContextValue {
   token: string | null;
   isLoading: boolean;
   isLoggedIn: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  role: Role;
+  login: (email: string, password: string, forceLogoutOther?: boolean) => Promise<any>;
+  register: (name: string, email: string, password: string) => Promise<any>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  hasRole: (allowedRoles: Role | Role[]) => boolean;
+  hasPermission: (requiredPermission: string) => boolean;
 }
 
 // ── Context ───────────────────────────────────────────────
@@ -40,9 +45,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<StoredUser | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // true on first load
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Hydrate from localStorage on mount
+  // Hydrate from localStorage on mount & fetch latest profile from backend
   useEffect(() => {
     const storedToken = getToken();
     const storedUser = getStoredUser();
@@ -50,32 +55,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (storedToken && storedUser) {
       setTokenState(storedToken);
       setUser(storedUser);
-    }
 
-    setIsLoading(false);
+      // Verify token & sync latest user details (role, permissions) from server
+      axiosInstance
+        .get("/api/auth/me")
+        .then(({ data }) => {
+          if (data.user) {
+            setStoredUser(data.user);
+            setUser(data.user);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   // ── Login ───────────────────────────────────────────────
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, forceLogoutOther = false) => {
       setIsLoading(true);
       try {
         const { data } = await axiosInstance.post("/api/auth/login", {
           email,
           password,
+          forceLogoutOther,
         });
 
-        setToken(data.token);
-        setStoredUser(data.user);
-        setTokenState(data.token);
-        setUser(data.user);
+        if (data.token && data.user) {
+          setToken(data.token);
+          setStoredUser(data.user);
+          if (data.sessionId) setSessionId(data.sessionId);
+          setTokenState(data.token);
+          setUser(data.user);
 
-        router.push("/dashboard");
+          // Route according to user role
+          const role = data.user.role || "student";
+          if (role === "admin") {
+            router.push("/admin");
+          } else if (role === "mentor") {
+            router.push("/mentor");
+          } else {
+            router.push("/dashboard");
+          }
+        }
+        return data;
       } finally {
         setIsLoading(false);
       }
     },
-    [router],
+    [router]
   );
 
   // ── Register ────────────────────────────────────────────
@@ -89,17 +119,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password,
         });
 
-        setToken(data.token);
-        setStoredUser(data.user);
-        setTokenState(data.token);
-        setUser(data.user);
-
-        router.push("/dashboard");
+        if (data.token && data.user) {
+          setToken(data.token);
+          setStoredUser(data.user);
+          if (data.sessionId) setSessionId(data.sessionId);
+          setTokenState(data.token);
+          setUser(data.user);
+          router.push("/dashboard");
+        }
+        return data;
       } finally {
         setIsLoading(false);
       }
     },
-    [router],
+    [router]
   );
 
   // ── Logout ──────────────────────────────────────────────
@@ -114,13 +147,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const { data } = await axiosInstance.get("/api/auth/me");
-      setStoredUser(data.user);
-      setUser(data.user);
+      if (data.user) {
+        setStoredUser(data.user);
+        setUser(data.user);
+      }
     } catch {
-      // token invalid — log out
       logout();
     }
   }, [logout]);
+
+  const role: Role = (user?.role as Role) || "student";
+
+  const hasRoleCallback = useCallback(
+    (allowedRoles: Role | Role[]) => checkHasRole(user?.role, allowedRoles),
+    [user?.role]
+  );
+
+  const hasPermissionCallback = useCallback(
+    (requiredPermission: string) =>
+      checkHasPermission(user?.role as Role, user?.permissions || [], requiredPermission),
+    [user?.role, user?.permissions]
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -128,16 +175,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       isLoading,
       isLoggedIn: !!token && !!user,
+      role,
       login,
       register,
       logout,
       refreshUser,
+      hasRole: hasRoleCallback,
+      hasPermission: hasPermissionCallback,
     }),
-    [user, token, isLoading, login, register, logout, refreshUser],
+    [user, token, isLoading, role, login, register, logout, refreshUser, hasRoleCallback, hasPermissionCallback]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// ── Raw context export (used by useAuth hook) ─────────────
 export { AuthContext };

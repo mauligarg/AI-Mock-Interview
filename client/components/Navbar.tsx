@@ -33,17 +33,39 @@ export function Navbar() {
   const initial = user?.name?.charAt(0).toUpperCase() ?? "U";
   const firstName = user?.name?.split(" ")[0] ?? "there";
 
-  const navLinks = isLoggedIn
-    ? [
-        { href: "/dashboard", label: "Dashboard", icon: "⚡" },
-        { href: "/practice", label: "Practice", icon: "🎯" },
-        { href: "/history", label: "My Sessions", icon: "📊" },
-      ]
-    : [
-        { href: "/#features", label: "Features", icon: "✨" },
-        { href: "/#how-it-works", label: "How It Works", icon: "🔍" },
-        { href: "/#domains", label: "Domains", icon: "🧩" },
+  const role = user?.role || "student";
+
+  let navLinks = [
+    { href: "/#features", label: "Features", icon: "✨" },
+    { href: "/#how-it-works", label: "How It Works", icon: "🔍" },
+    { href: "/#domains", label: "Domains", icon: "🧩" },
+  ];
+
+  if (isLoggedIn) {
+    if (role === "admin") {
+      navLinks = [
+        { href: "/admin", label: "Admin Dashboard", icon: "⚡" },
+        { href: "/admin/users", label: "User Management", icon: "👥" },
+        { href: "/admin/activity", label: "Platform Activity", icon: "📜" },
+        { href: "/admin/settings", label: "System Settings", icon: "⚙️" },
+        { href: "/settings/security", label: "Security", icon: "🛡️" },
       ];
+    } else if (role === "mentor") {
+      navLinks = [
+        { href: "/mentor", label: "Mentor Dashboard", icon: "⚡" },
+        { href: "/mentor/students", label: "Assigned Students", icon: "🎓" },
+        { href: "/settings/security", label: "Security", icon: "🛡️" },
+      ];
+    } else {
+      navLinks = [
+        { href: "/dashboard", label: "Dashboard", icon: "⚡" },
+        { href: "/challenges", label: "Challenge Arena", icon: "🏆" },
+        { href: "/dashboard/readiness", label: "Readiness", icon: "🎯" },
+        { href: "/history", label: "My Sessions", icon: "📊" },
+        { href: "/settings/security", label: "Security", icon: "🛡️" },
+      ];
+    }
+  }
 
   return (
     <nav
@@ -112,10 +134,19 @@ export function Navbar() {
                       {initial}
                     </span>
                   </div>
-                  <span className="text-sm text-muted-foreground font-medium">
+                  <span className="text-sm text-muted-foreground font-medium flex items-center gap-1.5">
                     Hi,{" "}
                     <span className="text-foreground font-semibold">
                       {firstName}
+                    </span>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded-md tracking-wider ${
+                      role === "admin"
+                        ? "bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30"
+                        : role === "mentor"
+                        ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                        : "bg-primary/15 text-primary border border-primary/25"
+                    }`}>
+                      {role}
                     </span>
                   </span>
                 </div>
